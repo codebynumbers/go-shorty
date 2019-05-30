@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "github.com/julienschmidt/httprouter"
   "log"
   "math"
   "net/http"
@@ -10,35 +11,38 @@ import (
 
 // Config
 var port = "3000"
+var domain = fmt.Sprintf("localhost:%s", port)
 
 var numerals = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 var next_id = 1000
 var urls = make(map[string]string)
 var tags = make(map[string]string)
 
-func shortenHandler(w http.ResponseWriter, r *http.Request) {
+func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
   url, ok := r.URL.Query()["url"]
   if (ok) {
     w.Write([]byte(shorten(url[0])))
   }
 }
 
-func lengthenHandler(w http.ResponseWriter, r *http.Request) {
-  tag, t_ok := r.URL.Query()["tag"]
-  if (t_ok) {
-    url, u_ok := urls[tag[0]]
-    if (u_ok) {
-      w.Write([]byte(url))
-    }
+func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+  tag := ps.ByName("tag")
+  url, u_ok := urls[tag]
+  if (u_ok) {
+     http.Redirect(w, r, url, 301)
+  } else {
+     w.WriteHeader(404)
+     w.Write([]byte("404 page not found"))
   }
 }
 
 func main() {
-  mux := http.NewServeMux()
-  mux.Handle("/shorten", http.HandlerFunc(shortenHandler))
-  mux.Handle("/lengthen", http.HandlerFunc(lengthenHandler))
+  router := httprouter.New()
+  router.GET("/s/", shortenHandler)
+  router.GET("/e/:tag", expandHandler)
+
   log.Println(fmt.Sprintf("Listening on %s...", port))
-  http.ListenAndServe(fmt.Sprintf(":%s", port), mux)
+  http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 }
 
 
@@ -79,6 +83,6 @@ func shorten(url string) string {
         urls[tag] = url
         tags[url] = tag
     }
-    return fmt.Sprintf("http://short.ly/%s", tag)
+    return fmt.Sprintf("http://%s/e/%s", domain, tag)
 }
 
