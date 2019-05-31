@@ -24,9 +24,10 @@ var client = redis.NewClient(&redis.Options{
 })
 
 func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-  url, ok := r.URL.Query()["url"]
-  if (ok) {
-    w.Write([]byte(shorten(url[0])))
+  r.ParseForm()
+  url := r.Form.Get("url")
+  if (url != "") {
+    w.Write([]byte(shorten(url) + "\n"))
   }
 }
 
@@ -43,15 +44,14 @@ func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
      if !strings.HasPrefix(url, "http") {
          url = "http://" + url
      }
-     http.Redirect(w, r, url, 302)
+     http.Redirect(w, r, url, 301)
   }
 }
 
 func main() {
   router := httprouter.New()
-  router.GET("/s/", shortenHandler)
-  router.GET("/e/:tag", expandHandler)
-
+  router.GET("/:tag", expandHandler)
+  router.POST("/data/shorten/", shortenHandler)
   log.Println(fmt.Sprintf("Listening on %s...", port))
   http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 }
@@ -96,6 +96,6 @@ func shorten(url string) string {
         panic(err)
     }
 
-    return fmt.Sprintf("http://%s/e/%s", domain, tag)
+    return fmt.Sprintf("http://%s/%s", domain, tag)
 }
 
