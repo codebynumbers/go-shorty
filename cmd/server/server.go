@@ -38,9 +38,14 @@ func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
      w.WriteHeader(404)
      w.Write([]byte("404 page not found"))
   } else if err != nil {
-        panic(err)
+     panic(err)
   } else {
-     http.Redirect(w, r, url, 301)
+     log.Println(url)
+     if !strings.HasPrefix(url, "http") {
+         url = "http://" + url
+         log.Println(url)
+     }
+     http.Redirect(w, r, url, 302)
   }
 }
 
