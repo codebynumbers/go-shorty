@@ -40,10 +40,8 @@ func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
   } else if err != nil {
      panic(err)
   } else {
-     log.Println(url)
      if !strings.HasPrefix(url, "http") {
          url = "http://" + url
-         log.Println(url)
      }
      http.Redirect(w, r, url, 302)
   }
