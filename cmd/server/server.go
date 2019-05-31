@@ -4,6 +4,7 @@ import (
   "fmt"
   "github.com/go-redis/redis"
   "github.com/julienschmidt/httprouter"
+  "html/template"
   "log"
   "math"
   "net/http"
@@ -22,6 +23,11 @@ var client = redis.NewClient(&redis.Options{
     Password: "",               // no password set
     DB:       0,                // use default DB
 })
+
+func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+  tmpl := template.Must(template.ParseFiles("templates/index.html"))
+  tmpl.Execute(w, nil)
+}
 
 func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
   r.ParseForm()
@@ -50,6 +56,7 @@ func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 
 func main() {
   router := httprouter.New()
+  router.GET("/", indexHandler)
   router.GET("/:tag", expandHandler)
   router.POST("/data/shorten/", shortenHandler)
   log.Println(fmt.Sprintf("Listening on %s...", port))
