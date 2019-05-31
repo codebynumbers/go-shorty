@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "github.com/go-redis/redis"
   "github.com/julienschmidt/httprouter"
   "log"
   "math"
@@ -15,8 +16,12 @@ var domain = fmt.Sprintf("localhost:%s", port)
 
 var numerals = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 var next_id = 1000
-var urls = make(map[string]string)
-var tags = make(map[string]string)
+
+var client = redis.NewClient(&redis.Options{
+    Addr:     "localhost:6379", // use default Addr
+    Password: "",               // no password set
+    DB:       0,                // use default DB
+})
 
 func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
   url, ok := r.URL.Query()["url"]
@@ -27,12 +32,15 @@ func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 
 func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
   tag := ps.ByName("tag")
-  url, u_ok := urls[tag]
-  if (u_ok) {
-     http.Redirect(w, r, url, 301)
-  } else {
+
+  url, err := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
+  if err == redis.Nil {
      w.WriteHeader(404)
      w.Write([]byte("404 page not found"))
+  } else if err != nil {
+        panic(err)
+  } else {
+     http.Redirect(w, r, url, 301)
   }
 }
 
@@ -52,7 +60,7 @@ func baseN(num int) string {
         return "0"
     }
 
-    // must cast byte to string to concat 
+    // must cast byte to string to concat
     return strings.TrimLeft(baseN(num / 62), "0") + string(numerals[num % 62])
 }
 
@@ -73,16 +81,18 @@ func shorten(url string) string {
     /* Check list, if new url, insert and bump id
        return "shortened" url
     */
-    tag, ok := tags[url]
-
-    if !ok {
+    tag, err := client.Get(fmt.Sprintf("tags:%s", url)).Result()
+    if err == redis.Nil {
         next_id += 1
         tag = baseN(next_id)
 
-        // setup 2-way lookup
-        urls[tag] = url
-        tags[url] = tag
+        client.Set(fmt.Sprintf("urls:%s", tag), url, 0).Err()
+        client.Set(fmt.Sprintf("tags:%s", url), tag, 0).Err()
+
+    } else if err != nil {
+        panic(err)
     }
+
     return fmt.Sprintf("http://%s/e/%s", domain, tag)
 }
 
