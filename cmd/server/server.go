@@ -1,108 +1,84 @@
 package main
 
 import (
-  "fmt"
-  "github.com/go-redis/redis"
-  "github.com/julienschmidt/httprouter"
-  "html/template"
-  "log"
-  "math"
-  "net/http"
-  "strings"
+	"encoding/hex"
+	"fmt"
+	"github.com/go-redis/redis"
+	"github.com/julienschmidt/httprouter"
+	"hash/fnv"
+	"html/template"
+	"log"
+	"net/http"
+	"strings"
 )
 
 // Config
-var port = "3000"
-var domain = fmt.Sprintf("localhost:%s", port)
+const port = "3000"
+const domain = "localhost"
 
-var numerals = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-var next_id = 1000
+var serving_domain = fmt.Sprintf("%s:%s", domain, port)
 
 var client = redis.NewClient(&redis.Options{
-    Addr:     "localhost:6379", // use default Addr
-    Password: "",               // no password set
-    DB:       0,                // use default DB
+	Addr:     "localhost:6379", // use default Addr
+	Password: "",               // no password set
+	DB:       0,                // use default DB
 })
 
-func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-  tmpl := template.Must(template.ParseFiles("templates/index.html"))
-  tmpl.Execute(w, nil)
+func main() {
+	router := httprouter.New()
+	router.GET("/", indexHandler)
+	router.GET("/:tag", expandHandler)
+	router.POST("/data/shorten/", shortenHandler)
+	log.Println(fmt.Sprintf("Listening on %s...", serving_domain))
+	http.ListenAndServe(serving_domain, router)
 }
 
-func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-  r.ParseForm()
-  url := r.Form.Get("url")
-  if (url != "") {
-    w.Write([]byte(shorten(url) + "\n"))
-  }
+func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl.Execute(w, nil)
 }
 
 func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-  tag := ps.ByName("tag")
+	tag := ps.ByName("tag")
 
-  url, err := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
-  if err == redis.Nil {
-     w.WriteHeader(404)
-     w.Write([]byte("404 page not found"))
-  } else if err != nil {
-     panic(err)
-  } else {
-     if !strings.HasPrefix(url, "http") {
-         url = "http://" + url
-     }
-     http.Redirect(w, r, url, 301)
-  }
+	url, err := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
+	if err == redis.Nil {
+		w.WriteHeader(404)
+		w.Write([]byte("404 page not found"))
+	} else if err != nil {
+		panic(err)
+	} else {
+		if !strings.HasPrefix(url, "http") {
+			url = "http://" + url
+		}
+		http.Redirect(w, r, url, 301)
+	}
 }
 
-func main() {
-  router := httprouter.New()
-  router.GET("/", indexHandler)
-  router.GET("/:tag", expandHandler)
-  router.POST("/data/shorten/", shortenHandler)
-  log.Println(fmt.Sprintf("Listening on %s...", port))
-  http.ListenAndServe(fmt.Sprintf(":%s", port), router)
-}
-
-
-func baseN(num int) string {
-    // Convert base 10 to base 62
-    if num == 0 {
-        return "0"
-    }
-
-    // must cast byte to string to concat
-    return strings.TrimLeft(baseN(num / 62), "0") + string(numerals[num % 62])
-}
-
-
-func rebase(word string) int {
-    // Convert from base62 back to base10
-    power := len(word)-1
-    sum := 0
-    for _, char := range word {
-        pos := strings.Index(numerals, string(char))
-        sum += int(float64(pos) * math.Pow(float64(62), float64(power)))
-        power -= 1
-    }
-    return sum
+func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	r.ParseForm()
+	url := r.Form.Get("url")
+	if url != "" {
+		w.Write([]byte(shorten(url) + "\n"))
+	}
 }
 
 func shorten(url string) string {
-    /* Check list, if new url, insert and bump id
-       return "shortened" url
-    */
-    tag, err := client.Get(fmt.Sprintf("tags:%s", url)).Result()
-    if err == redis.Nil {
-        next_id += 1
-        tag = baseN(next_id)
+	/* Check list, if new url, insert
+	   return "shortened" url
+	*/
 
-        client.Set(fmt.Sprintf("urls:%s", tag), url, 0).Err()
-        client.Set(fmt.Sprintf("tags:%s", url), tag, 0).Err()
+	tag, err := client.Get(fmt.Sprintf("tags:%s", url)).Result()
+	if err == redis.Nil {
+		hash := fnv.New32a()
+		hash.Write([]byte(url))
+		tag = hex.EncodeToString(hash.Sum(nil))
+		client.Set(fmt.Sprintf("urls:%s", tag), url, 0).Err()
+		client.Set(fmt.Sprintf("tags:%s", url), tag, 0).Err()
 
-    } else if err != nil {
-        panic(err)
-    }
+	} else if err != nil {
+		panic(err)
+	}
 
-    return fmt.Sprintf("http://%s/%s", domain, tag)
+	return fmt.Sprintf("http://%s/%s", serving_domain, tag)
 }
-
