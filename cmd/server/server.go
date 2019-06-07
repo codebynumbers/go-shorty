@@ -63,11 +63,8 @@ func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	}
 }
 
+// shorten encodes the url and returns and new url to reach it at
 func shorten(url string) string {
-	/* Check list, if new url, insert
-	   return "shortened" url
-	*/
-
 	tag, err := client.Get(fmt.Sprintf("tags:%s", url)).Result()
 	if err == redis.Nil {
 		hash := fnv.New32a()
