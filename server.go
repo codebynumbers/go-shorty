@@ -1,10 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"github.com/go-redis/redis"
 	"github.com/julienschmidt/httprouter"
+	_ "github.com/mattn/go-sqlite3"
 	"hash/fnv"
 	"html/template"
 	"log"
@@ -16,7 +18,7 @@ import (
 const port = "3000"
 const domain = "localhost"
 
-var serving_domain = fmt.Sprintf("%s:%s", domain, port)
+var servingDomain = fmt.Sprintf("%s:%s", domain, port)
 
 var client = redis.NewClient(&redis.Options{
 	Addr:     "localhost:6379", // use default Addr
@@ -24,13 +26,28 @@ var client = redis.NewClient(&redis.Options{
 	DB:       0,                // use default DB
 })
 
+var db *sql.DB
+
 func main() {
+	initDb()
 	router := httprouter.New()
 	router.GET("/", indexHandler)
 	router.GET("/:tag", expandHandler)
 	router.POST("/data/shorten/", shortenHandler)
-	log.Println(fmt.Sprintf("Listening on %s...", serving_domain))
-	http.ListenAndServe(serving_domain, router)
+	log.Println(fmt.Sprintf("Listening on %s...", servingDomain))
+	http.ListenAndServe(servingDomain, router)
+}
+
+func initDb() {
+	var err error
+	db, err = sql.Open("sqlite3", "./shorty.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err = db.Ping(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -41,18 +58,38 @@ func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	tag := ps.ByName("tag")
 
-	url, err := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
-	if err == redis.Nil {
+	// check cache
+	url, _ := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
+
+	// Check db
+	if url == "" {
+		rows, err := db.Query("SELECT url from urls where hash=?", tag)
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		if rows.Next() {
+			rows.Scan(&url)
+		}
+
+		// update cache
+		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+	}
+
+	// give up
+	if url == "" {
 		w.WriteHeader(404)
 		w.Write([]byte("404 page not found"))
-	} else if err != nil {
-		panic(err)
-	} else {
-		if !strings.HasPrefix(url, "http") {
-			url = "http://" + url
-		}
-		http.Redirect(w, r, url, 301)
+		return
 	}
+
+	if !strings.HasPrefix(url, "http") {
+		url = "http://" + url
+	}
+
+	// respond
+	http.Redirect(w, r, url, 301)
 }
 
 func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -70,12 +107,12 @@ func shorten(url string) string {
 		hash := fnv.New32a()
 		hash.Write([]byte(url))
 		tag = hex.EncodeToString(hash.Sum(nil))
-		client.Set(fmt.Sprintf("urls:%s", tag), url, 0).Err()
-		client.Set(fmt.Sprintf("tags:%s", url), tag, 0).Err()
+		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+		client.Set(fmt.Sprintf("tags:%s", url), tag, 0)
 
 	} else if err != nil {
-		panic(err)
+		log.Println(err)
 	}
 
-	return fmt.Sprintf("http://%s/%s", serving_domain, tag)
+	return fmt.Sprintf("http://%s/%s", servingDomain, tag)
 }
