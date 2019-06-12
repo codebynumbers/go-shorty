@@ -17,6 +17,8 @@ import (
 // Config
 const port = "3000"
 const domain = "localhost"
+const dbDriver = "sqlite3"
+const dbPath = "./shorty.db"
 
 var servingDomain = fmt.Sprintf("%s:%s", domain, port)
 
@@ -40,7 +42,7 @@ func main() {
 
 func initDb() {
 	var err error
-	db, err = sql.Open("sqlite3", "./shorty.db")
+	db, err = sql.Open(dbDriver, dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
