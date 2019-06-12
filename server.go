@@ -115,7 +115,7 @@ func cachedGetUrl(tag string) string {
 
 	// Check db
 	if url == "" {
-		rows, err := db.Query("SELECT url from urls where hash=?", tag)
+		rows, err := db.Query("SELECT url from urls where tag=?", tag)
 
 		if err != nil {
 			log.Println(err)

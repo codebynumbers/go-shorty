@@ -1,4 +1,4 @@
 CREATE TABLE `urls` (
-    `hash` VARCHAR (10) PRIMARY KEY,
+    `tag` VARCHAR (10) PRIMARY KEY,
     `url` VARCHAR(2048) NOT NULL
 );
