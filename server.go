@@ -1,3 +1,4 @@
+// Package provides a simple url shortener using redis fronted sqlite
 package main
 
 import (
@@ -87,7 +88,6 @@ func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 
 // shorten encodes the url and returns and new url to reach it at
 func shorten(url string) string {
-
 	hash := fnv.New32a()
 	hash.Write([]byte(url))
 	tag := hex.EncodeToString(hash.Sum(nil))
@@ -112,7 +112,7 @@ func shorten(url string) string {
 
 // cachedGetUrl will check redis for url by tag, then db. If found in db, update the cache.
 func cachedGetUrl(tag string) string {
-	
+
 	url, _ := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
 
 	// Check db
