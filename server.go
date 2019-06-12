@@ -110,9 +110,9 @@ func shorten(url string) string {
 	return fmt.Sprintf("http://%s/%s", servingDomain, tag)
 }
 
+// cachedGetUrl will check redis for url by tag, then db. If found in db, update the cache.
 func cachedGetUrl(tag string) string {
-	// check cache, db, update cache
-
+	
 	url, _ := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
 
 	// Check db
