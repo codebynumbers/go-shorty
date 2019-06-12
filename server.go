@@ -58,24 +58,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	tag := ps.ByName("tag")
 
-	// check cache
-	url, _ := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
-
-	// Check db
-	if url == "" {
-		rows, err := db.Query("SELECT url from urls where hash=?", tag)
-
-		if err != nil {
-			log.Println(err)
-		}
-
-		if rows.Next() {
-			rows.Scan(&url)
-		}
-
-		// update cache
-		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
-	}
+	url := cachedGetUrl(tag)
 
 	// give up
 	if url == "" {
@@ -102,17 +85,49 @@ func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 
 // shorten encodes the url and returns and new url to reach it at
 func shorten(url string) string {
-	tag, err := client.Get(fmt.Sprintf("tags:%s", url)).Result()
-	if err == redis.Nil {
-		hash := fnv.New32a()
-		hash.Write([]byte(url))
-		tag = hex.EncodeToString(hash.Sum(nil))
-		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
-		client.Set(fmt.Sprintf("tags:%s", url), tag, 0)
 
-	} else if err != nil {
-		log.Println(err)
+	hash := fnv.New32a()
+	hash.Write([]byte(url))
+	tag := hex.EncodeToString(hash.Sum(nil))
+
+	cachedUrl := cachedGetUrl(tag)
+
+	if cachedUrl == "" {
+		stmt, err := db.Prepare("INSERT INTO urls (tag, url) values (?, ?)")
+
+		if err != nil {
+			log.Println(err)
+		}
+		_, err = stmt.Exec(tag, url)
+
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	return fmt.Sprintf("http://%s/%s", servingDomain, tag)
+}
+
+func cachedGetUrl(tag string) string {
+	// check cache, db, update cache
+
+	url, _ := client.Get(fmt.Sprintf("urls:%s", tag)).Result()
+
+	// Check db
+	if url == "" {
+		rows, err := db.Query("SELECT url from urls where hash=?", tag)
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		if rows.Next() {
+			rows.Scan(&url)
+		}
+
+		// update cache
+		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+	}
+
+	return url
 }
