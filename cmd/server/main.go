@@ -54,7 +54,7 @@ func initDb() {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl := template.Must(template.ParseFiles("web/templates/index.html"))
 	tmpl.Execute(w, nil)
 }
 
