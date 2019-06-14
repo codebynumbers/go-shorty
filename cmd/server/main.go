@@ -125,10 +125,10 @@ func cachedGetUrl(tag string) string {
 
 		if rows.Next() {
 			rows.Scan(&url)
-		}
 
-		// update cache
-		client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+			// update cache
+			client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+		}
 	}
 
 	return url
