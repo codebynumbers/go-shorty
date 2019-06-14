@@ -24,12 +24,16 @@ const dbPath = "./shorty.db"
 var servingDomain = fmt.Sprintf("%s:%s", domain, port)
 
 var client = redis.NewClient(&redis.Options{
-	Addr:     "localhost:6379", // use default Addr
+	Addr:     "localhost:16379", // for local docker-compose
 	Password: "",               // no password set
 	DB:       0,                // use default DB
 })
 
 var db *sql.DB
+
+type ResultPageData struct {
+	ShortenedUrl string
+}
 
 func main() {
 	initDb()
@@ -54,8 +58,8 @@ func initDb() {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	tmpl := template.Must(template.ParseFiles("web/templates/index.html"))
-	tmpl.Execute(w, nil)
+	tmpl, _ := template.New("").ParseFiles("web/templates/index.html", "web/templates/base.html")
+	_ = tmpl.ExecuteTemplate(w, "base", nil)
 }
 
 func expandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -82,7 +86,13 @@ func shortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	r.ParseForm()
 	url := r.Form.Get("url")
 	if url != "" {
-		w.Write([]byte(shorten(url) + "\n"))
+
+		context := ResultPageData{
+			ShortenedUrl: shorten(url),
+		}
+
+		tmpl, _ := template.New("").ParseFiles("web/templates/result.html", "web/templates/base.html")
+		_ = tmpl.ExecuteTemplate(w, "base", context)
 	}
 }
 
