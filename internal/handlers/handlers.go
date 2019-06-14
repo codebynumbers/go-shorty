@@ -25,7 +25,13 @@ func IndexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 func ExpandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	tag := ps.ByName("tag")
 
-	url := cachedGetUrl(tag)
+	url, err := cachedGetUrl(tag)
+
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte("500 Internal Server Error"))
+		return
+	}
 
 	// give up
 	if url == "" {
@@ -47,8 +53,15 @@ func ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	url := r.Form.Get("url")
 	if url != "" {
 
+		shortened, err := shorten(url)
+		if err != nil {
+			w.WriteHeader(500)
+			w.Write([]byte("500 Internal Server Error"))
+			return
+		}
+
 		context := ResultPageData{
-			ShortenedUrl: shorten(url),
+			ShortenedUrl: shortened,
 		}
 
 		tmpl, _ := template.New("").ParseFiles("web/templates/result.html", "web/templates/base.html")
@@ -56,32 +69,37 @@ func ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	}
 }
 
-// shorten encodes the url and returns and new url to reach it at
-func shorten(url string) string {
+// shorten encodes the url and returns a new url to reach it at
+func shorten(url string) (string, error) {
 	hash := fnv.New32a()
 	hash.Write([]byte(url))
 	tag := hex.EncodeToString(hash.Sum(nil))
 
-	cachedUrl := cachedGetUrl(tag)
+	cachedUrl, err := cachedGetUrl(tag)
+	if err != nil {
+		return "", err
+	}
 
 	if cachedUrl == "" {
 		stmt, err := connections.Db.Prepare("INSERT INTO urls (tag, url) values (?, ?)")
 
 		if err != nil {
 			log.Println(err)
+			return "", err
 		}
 		_, err = stmt.Exec(tag, url)
 
 		if err != nil {
 			log.Println(err)
+			return "", err
 		}
 	}
 
-	return fmt.Sprintf("http://%s/%s", configuration.AppConfig.ExternalDomain, tag)
+	return fmt.Sprintf("http://%s/%s", configuration.AppConfig.ExternalDomain, tag), nil
 }
 
 // cachedGetUrl will check redis for url by tag, then db. If found in db, update the cache.
-func cachedGetUrl(tag string) string {
+func cachedGetUrl(tag string) (string, error) {
 
 	url, _ := connections.Cache.Get(fmt.Sprintf("urls:%s", tag)).Result()
 
@@ -91,6 +109,7 @@ func cachedGetUrl(tag string) string {
 
 		if err != nil {
 			log.Println(err)
+			return "", err
 		}
 
 		if rows.Next() {
@@ -102,5 +121,5 @@ func cachedGetUrl(tag string) string {
 		rows.Close()
 	}
 
-	return url
+	return url, nil
 }
