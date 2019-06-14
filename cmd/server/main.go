@@ -139,6 +139,7 @@ func cachedGetUrl(tag string) string {
 			// update cache
 			client.Set(fmt.Sprintf("urls:%s", tag), url, 0)
 		}
+		rows.Close()
 	}
 
 	return url
