@@ -7,7 +7,6 @@ import (
 	"github.com/codebynumbers/go-shorty/internal/connections"
 	"github.com/codebynumbers/go-shorty/internal/handlers"
 	"github.com/julienschmidt/httprouter"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"net/http"
 )
@@ -18,10 +17,16 @@ func main() {
 	connections.InitDb(config)
 	connections.InitRedis(config)
 
+	handlerEnv := handlers.HandlerEnv{
+		AppConfig: config,
+		Db:        connections.Db,
+		Cache:     connections.Cache,
+	}
+
 	router := httprouter.New()
-	router.GET("/", handlers.IndexHandler)
-	router.GET("/:tag", handlers.ExpandHandler)
-	router.POST("/data/shorten/", handlers.ShortenHandler)
+	router.GET("/", handlerEnv.IndexHandler)
+	router.GET("/:tag", handlerEnv.ExpandHandler)
+	router.POST("/data/shorten/", handlerEnv.ShortenHandler)
 
 	servingDomain := fmt.Sprintf("%s:%s", config.HostDomain, config.HostPort)
 	log.Println(fmt.Sprintf("Listening on %s...", servingDomain))

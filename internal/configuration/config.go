@@ -17,10 +17,10 @@ type Config struct {
 
 var AppConfig Config
 
-func Configure() *Config {
+func Configure() Config {
 	var err error
 	if err = envconfig.Process("GOSHORTY", &AppConfig); err != nil {
 		log.Fatal(err)
 	}
-	return &AppConfig
+	return AppConfig
 }

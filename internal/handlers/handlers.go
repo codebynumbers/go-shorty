@@ -1,10 +1,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"github.com/codebynumbers/go-shorty/internal/configuration"
-	"github.com/codebynumbers/go-shorty/internal/connections"
+	"github.com/go-redis/redis"
 	"github.com/julienschmidt/httprouter"
 	"hash/fnv"
 	"html/template"
@@ -17,15 +18,21 @@ type ResultPageData struct {
 	ShortenedUrl string
 }
 
-func IndexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+type HandlerEnv struct {
+	AppConfig configuration.Config
+	Db        *sql.DB
+	Cache     *redis.Client
+}
+
+func (env *HandlerEnv) IndexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	tmpl, _ := template.New("").ParseFiles("web/templates/index.html", "web/templates/base.html")
 	_ = tmpl.ExecuteTemplate(w, "base", nil)
 }
 
-func ExpandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (env *HandlerEnv) ExpandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	tag := ps.ByName("tag")
 
-	url, err := cachedGetUrl(tag)
+	url, err := env.cachedGetUrl(tag)
 
 	if err != nil {
 		w.WriteHeader(500)
@@ -48,12 +55,12 @@ func ExpandHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 	http.Redirect(w, r, url, 301)
 }
 
-func ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func (env *HandlerEnv) ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	r.ParseForm()
 	url := r.Form.Get("url")
 	if url != "" {
 
-		shortened, err := shorten(url)
+		shortened, err := env.shorten(url)
 		if err != nil {
 			w.WriteHeader(500)
 			w.Write([]byte("500 Internal Server Error"))
@@ -70,18 +77,18 @@ func ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 // shorten encodes the url and returns a new url to reach it at
-func shorten(url string) (string, error) {
+func (env *HandlerEnv) shorten(url string) (string, error) {
 	hash := fnv.New32a()
 	hash.Write([]byte(url))
 	tag := hex.EncodeToString(hash.Sum(nil))
 
-	cachedUrl, err := cachedGetUrl(tag)
+	cachedUrl, err := env.cachedGetUrl(tag)
 	if err != nil {
 		return "", err
 	}
 
 	if cachedUrl == "" {
-		stmt, err := connections.Db.Prepare("INSERT INTO urls (tag, url) values (?, ?)")
+		stmt, err := env.Db.Prepare("INSERT INTO urls (tag, url) values (?, ?)")
 
 		if err != nil {
 			log.Println(err)
@@ -95,17 +102,17 @@ func shorten(url string) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf("http://%s/%s", configuration.AppConfig.ExternalDomain, tag), nil
+	return fmt.Sprintf("http://%s/%s", env.AppConfig.ExternalDomain, tag), nil
 }
 
 // cachedGetUrl will check redis for url by tag, then db. If found in db, update the cache.
-func cachedGetUrl(tag string) (string, error) {
+func (env *HandlerEnv) cachedGetUrl(tag string) (string, error) {
 
-	url, _ := connections.Cache.Get(fmt.Sprintf("urls:%s", tag)).Result()
+	url, _ := env.Cache.Get(fmt.Sprintf("urls:%s", tag)).Result()
 
 	// Check db
 	if url == "" {
-		rows, err := connections.Db.Query("SELECT url from urls where tag=?", tag)
+		rows, err := env.Db.Query("SELECT url from urls where tag=?", tag)
 
 		if err != nil {
 			log.Println(err)
@@ -116,7 +123,7 @@ func cachedGetUrl(tag string) (string, error) {
 			rows.Scan(&url)
 
 			// update cache
-			connections.Cache.Set(fmt.Sprintf("urls:%s", tag), url, 0)
+			env.Cache.Set(fmt.Sprintf("urls:%s", tag), url, 0)
 		}
 		rows.Close()
 	}
