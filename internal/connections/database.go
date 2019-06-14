@@ -7,16 +7,16 @@ import (
 	"log"
 )
 
-var Db *sql.DB
-
-func InitDb(config configuration.Config) {
+func InitDb(config configuration.Config) *sql.DB {
 	var err error
-	Db, err = sql.Open(config.DbDriver, config.DbPath)
+	db, err := sql.Open(config.DbDriver, config.DbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err = Db.Ping(); err != nil {
+	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
+
+	return db
 }

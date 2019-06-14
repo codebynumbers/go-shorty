@@ -14,13 +14,13 @@ import (
 func main() {
 
 	config := configuration.Configure()
-	connections.InitDb(config)
-	connections.InitRedis(config)
+	db := connections.InitDb(config)
+	cache := connections.InitRedis(config)
 
 	handlerEnv := handlers.HandlerEnv{
 		AppConfig: config,
-		Db:        connections.Db,
-		Cache:     connections.Cache,
+		Db:        db,
+		Cache:     cache,
 	}
 
 	router := httprouter.New()

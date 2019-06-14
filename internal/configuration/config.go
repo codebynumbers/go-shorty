@@ -15,12 +15,11 @@ type Config struct {
 	RedisPort      string `envconfig:"REDIS_PORT" default:"16379"`
 }
 
-var AppConfig Config
-
 func Configure() Config {
+	var appConfig Config
 	var err error
-	if err = envconfig.Process("GOSHORTY", &AppConfig); err != nil {
+	if err = envconfig.Process("GOSHORTY", &appConfig); err != nil {
 		log.Fatal(err)
 	}
-	return AppConfig
+	return appConfig
 }

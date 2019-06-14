@@ -6,10 +6,9 @@ import (
 	"github.com/go-redis/redis"
 )
 
-var Cache *redis.Client
-
-func InitRedis(config configuration.Config) {
-	Cache = redis.NewClient(&redis.Options{
+func InitRedis(config configuration.Config) *redis.Client {
+	cache := redis.NewClient(&redis.Options{
 		Addr: fmt.Sprintf("%s:%s", config.RedisHost, config.RedisPort),
 	})
+	return cache
 }
