@@ -78,9 +78,7 @@ func (env *HandlerEnv) ShortenHandler(w http.ResponseWriter, r *http.Request, _ 
 
 // shorten encodes the url and returns a new url to reach it at
 func (env *HandlerEnv) shorten(url string) (string, error) {
-	hash := fnv.New32a()
-	hash.Write([]byte(url))
-	tag := hex.EncodeToString(hash.Sum(nil))
+	tag := GenerateHash(url)
 
 	cachedUrl, err := env.cachedGetUrl(tag)
 	if err != nil {
@@ -103,6 +101,12 @@ func (env *HandlerEnv) shorten(url string) (string, error) {
 	}
 
 	return fmt.Sprintf("http://%s/%s", env.AppConfig.ExternalDomain, tag), nil
+}
+
+func GenerateHash(url string) (string) {
+	hash := fnv.New32a()
+	hash.Write([]byte(url))
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // cachedGetUrl will check redis for url by tag, then db. If found in db, update the cache.
