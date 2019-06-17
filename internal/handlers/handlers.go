@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -58,7 +59,14 @@ func (env *HandlerEnv) ExpandHandler(w http.ResponseWriter, r *http.Request, ps 
 func (env *HandlerEnv) ShortenHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	r.ParseForm()
 	url := r.Form.Get("url")
+
 	if url != "" {
+
+		if !IsUrl(url) {
+			w.WriteHeader(400)
+			w.Write([]byte("400 Bad Request - url did not validate, please be sure to include the protocol and path"))
+			return
+		}
 
 		shortened, err := env.shorten(url)
 		if err != nil {
@@ -133,4 +141,9 @@ func (env *HandlerEnv) cachedGetUrl(tag string) (string, error) {
 	}
 
 	return url, nil
+}
+
+func IsUrl(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
 }
