@@ -18,14 +18,10 @@ type ResultPageData struct {
 	ShortenedUrl string
 }
 
-type Cacheable interface {
-	Sleep()
-}
-
 type HandlerEnv struct {
 	AppConfig configuration.Config
 	Db        *sql.DB
-	Cache     *redis.Client
+	Cache     redis.Cmdable
 }
 
 func (env *HandlerEnv) IndexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
